@@ -126,6 +126,22 @@ class ServerModel with ChangeNotifier {
 
   List<Client> get clients => _clients;
 
+  bool get _shouldHideCmWindow =>
+      hideCm ||
+      !_clients.any((client) => !client.disconnected && !client.authorized);
+
+  void _updateCmWindowVisibility() {
+    if (desktopType != DesktopType.cm) return;
+    if (_clients.any((client) => client.authorized && !client.disconnected)) {
+      bind.cmHideMainWindow();
+    }
+    if (_clients.isEmpty || _shouldHideCmWindow) {
+      hideCmWindow();
+    } else {
+      showCmWindow();
+    }
+  }
+
   final controller = ScrollController();
 
   WeakReference<FFI> parent;
@@ -170,7 +186,7 @@ class ServerModel with ChangeNotifier {
             }
           } else {
             _zeroClientLengthCounter = 0;
-            if (!hideCm) showCmWindow();
+            _updateCmWindowVisibility();
           }
         }
       }
@@ -509,13 +525,7 @@ class ServerModel with ChangeNotifier {
         debugPrint("Failed to decode clientJson '$clientJson', error $e");
       }
     }
-    if (desktopType == DesktopType.cm) {
-      if (_clients.isEmpty) {
-        hideCmWindow();
-      } else if (!hideCm) {
-        showCmWindow();
-      }
-    }
+    _updateCmWindowVisibility();
     if (_clients.length != oldClientLenght) {
       notifyListeners();
       if (isAndroid) androidUpdatekeepScreenOn();
@@ -556,9 +566,7 @@ class ServerModel with ChangeNotifier {
         _clients.removeAt(index_disconnected);
         tabController.remove(index_disconnected);
       }
-      if (desktopType == DesktopType.cm && !hideCm) {
-        showCmWindow();
-      }
+      _updateCmWindowVisibility();
       scrollToBottom();
       notifyListeners();
       if (isAndroid && !client.authorized) showLoginDialog(client);
@@ -576,15 +584,8 @@ class ServerModel with ChangeNotifier {
         onTap: () {},
         page: desktop.buildConnectionCard(client)));
     Future.delayed(Duration.zero, () async {
-      if (!hideCm) windowOnTop(null);
+      if (!_shouldHideCmWindow) windowOnTop(null);
     });
-    // Only do the hidden task when on Desktop.
-    if (client.authorized && isDesktop) {
-      cmHiddenTimer = Timer(const Duration(seconds: 3), () {
-        if (!hideCm) windowManager.minimize();
-        cmHiddenTimer = null;
-      });
-    }
     parent.target?.chatModel
         .updateConnIdOfKey(MessageKey(client.peerId, client.id));
   }
@@ -682,6 +683,7 @@ class ServerModel with ChangeNotifier {
       }
       parent.target?.invokeMethod("cancel_notification", client.id);
       client.authorized = true;
+      _updateCmWindowVisibility();
       notifyListeners();
     } else {
       bind.cmLoginRes(connId: client.id, res: res);
@@ -689,6 +691,7 @@ class ServerModel with ChangeNotifier {
       final index = _clients.indexOf(client);
       tabController.remove(index);
       _clients.remove(client);
+      _updateCmWindowVisibility();
       if (isAndroid) androidUpdatekeepScreenOn();
     }
   }
@@ -710,9 +713,7 @@ class ServerModel with ChangeNotifier {
         parent.target?.dialogManager.dismissByTag(getLoginDialogTag(id));
         parent.target?.invokeMethod("cancel_notification", id);
       }
-      if (desktopType == DesktopType.cm && _clients.isEmpty) {
-        hideCmWindow();
-      }
+      _updateCmWindowVisibility();
       if (isAndroid) androidUpdatekeepScreenOn();
       notifyListeners();
     } catch (e) {

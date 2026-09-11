@@ -1788,6 +1788,13 @@ pub fn cm_get_clients_length() -> usize {
     crate::ui_cm_interface::get_clients_length()
 }
 
+pub fn cm_hide_main_window() -> SyncReturn<bool> {
+    #[cfg(windows)]
+    return SyncReturn(crate::platform::hide_main_window());
+    #[cfg(not(windows))]
+    SyncReturn(false)
+}
+
 pub fn main_init(app_dir: String, custom_client_config: String) {
     initialize(&app_dir, &custom_client_config);
 }

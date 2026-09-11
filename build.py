@@ -55,6 +55,19 @@ def system2(cmd):
         sys.exit(-1)
 
 
+def windows_short_path(path):
+    import ctypes
+
+    path = os.path.abspath(path)
+    size = ctypes.windll.kernel32.GetShortPathNameW(path, None, 0)
+    if size == 0:
+        return path
+    buffer = ctypes.create_unicode_buffer(size)
+    if ctypes.windll.kernel32.GetShortPathNameW(path, buffer, size) == 0:
+        return path
+    return buffer.value
+
+
 def get_version():
     with open("Cargo.toml", encoding="utf-8") as fh:
         for line in fh:
@@ -932,9 +945,18 @@ def build_flutter_windows(version, features, skip_portable_pack):
         if not os.path.exists("target/release/librustdesk.dll"):
             print("cargo build failed, please check rust source code.")
             exit(-1)
-    os.chdir('flutter')
-    system2('flutter build windows --release')
-    os.chdir('..')
+    flutter_dir = windows_short_path(os.path.join(REPO_ROOT, 'flutter'))
+    if not flutter_dir.isascii():
+        sys.stderr.write(
+            "Flutter on Windows cannot build from a path containing non-ASCII characters.\n")
+        sys.exit(-1)
+    exit_code = subprocess.run(
+        ['cmd.exe', '/d', '/c', 'flutter', 'build', 'windows', '--release'],
+        cwd=flutter_dir).returncode
+    if exit_code != 0:
+        sys.stderr.write(
+            "Error occurred when executing: `flutter build windows --release`. Exiting.\n")
+        sys.exit(-1)
     shutil.copy2('target/release/deps/dylib_virtual_display.dll',
                  flutter_build_dir_2)
     if skip_portable_pack:
@@ -942,7 +964,7 @@ def build_flutter_windows(version, features, skip_portable_pack):
     os.chdir('libs/portable')
     system2('pip3 install -r requirements.txt')
     system2(
-        f'python3 ./generate.py -f ../../{flutter_build_dir_2} -o . -e ../../{flutter_build_dir_2}/rustdesk.exe')
+        f'python ./generate.py -f ../../{flutter_build_dir_2} -o . -e ../../{flutter_build_dir_2}/rustdesk.exe')
     os.chdir('../..')
     if os.path.exists('./rustdesk_portable.exe'):
         os.replace('./target/release/rustdesk-portable-packer.exe',

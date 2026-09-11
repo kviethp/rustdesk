@@ -2782,6 +2782,19 @@ pub fn send_message_to_hnwd(
     return true;
 }
 
+pub fn hide_main_window() -> bool {
+    unsafe {
+        let class_name = wide_string(FLUTTER_RUNNER_WIN32_WINDOW_CLASS);
+        let window_name = wide_string(&crate::get_app_name());
+        let window = FindWindowW(class_name.as_ptr(), window_name.as_ptr());
+        if window.is_null() {
+            return false;
+        }
+        ShowWindow(window, SW_HIDE);
+    }
+    true
+}
+
 pub fn get_logon_user_token(user: &str, pwd: &str) -> ResultType<HANDLE> {
     let user_split = user.split("\\").collect::<Vec<&str>>();
     let wuser = wide_string(user_split.get(1).unwrap_or(&user));

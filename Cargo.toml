@@ -11,6 +11,7 @@ rust-version = "1.75"
 [lib]
 name = "librustdesk"
 crate-type = ["cdylib", "staticlib", "rlib"]
+path = "src/lib.rs"
 
 [[bin]]
 name = "naming"
