@@ -2417,7 +2417,24 @@ pub fn main_account_auth_result() -> String {
 pub fn main_on_main_window_close() {
     // may called more than one times
     #[cfg(windows)]
-    crate::portable_service::client::drop_portable_service_shared_memory();
+    {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        static BACKGROUND_SERVER_STARTED: AtomicBool = AtomicBool::new(false);
+        if crate::common::is_server_running()
+            && !crate::platform::windows::is_self_service_running()
+            && !BACKGROUND_SERVER_STARTED.swap(true, Ordering::SeqCst)
+        {
+            if let Err(err) = crate::platform::windows::start_server_after_current_process_exit() {
+                BACKGROUND_SERVER_STARTED.store(false, Ordering::SeqCst);
+                log::error!(
+                    "Failed to hand off server before closing main window: {}",
+                    err
+                );
+            }
+        }
+        crate::portable_service::client::drop_portable_service_shared_memory();
+    }
 }
 
 pub fn main_current_is_wayland() -> SyncReturn<bool> {

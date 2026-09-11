@@ -52,6 +52,7 @@ use winapi::{
             AllocateAndInitializeSid, DuplicateToken, EqualSid, FreeSid, GetTokenInformation,
         },
         shellapi::ShellExecuteW,
+        synchapi::WaitForSingleObject,
         sysinfoapi::{GetNativeSystemInfo, SYSTEM_INFO},
         winbase::*,
         wingdi::*,
@@ -60,7 +61,7 @@ use winapi::{
             DOMAIN_ALIAS_RID_ADMINS, ES_AWAYMODE_REQUIRED, ES_CONTINUOUS, ES_DISPLAY_REQUIRED,
             ES_SYSTEM_REQUIRED, HANDLE, PROCESS_ALL_ACCESS, PROCESS_QUERY_LIMITED_INFORMATION,
             PSID, SECURITY_BUILTIN_DOMAIN_RID, SECURITY_NT_AUTHORITY, SID_IDENTIFIER_AUTHORITY,
-            TOKEN_ELEVATION, TOKEN_GROUPS, TOKEN_QUERY, TOKEN_TYPE,
+            SYNCHRONIZE, TOKEN_ELEVATION, TOKEN_GROUPS, TOKEN_QUERY, TOKEN_TYPE,
         },
         winreg::HKEY_CURRENT_USER,
         winspool::{
@@ -869,6 +870,57 @@ pub fn run_exe_direct(
     match cmd.spawn() {
         Ok(child) => Ok(Some(child)),
         Err(e) => bail!("Failed to start process: {}", e),
+    }
+}
+
+const SERVER_PARENT_PID_ARG: &str = "--server-parent-pid=";
+
+pub fn start_server_after_current_process_exit() -> ResultType<()> {
+    let parent_pid_arg = format!("{}{}", SERVER_PARENT_PID_ARG, std::process::id());
+    std::process::Command::new(std::env::current_exe()?)
+        .args(["--server", parent_pid_arg.as_str()])
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|err| anyhow!("Failed to start background server: {}", err))?;
+    Ok(())
+}
+
+pub fn wait_for_server_parent_exit(args: &[String]) -> ResultType<()> {
+    let Some(parent_pid) = args
+        .iter()
+        .find_map(|arg| arg.strip_prefix(SERVER_PARENT_PID_ARG))
+    else {
+        return Ok(());
+    };
+    let parent_pid = parent_pid
+        .parse::<DWORD>()
+        .map_err(|err| anyhow!("Invalid server parent process id '{}': {}", parent_pid, err))?;
+    if parent_pid == unsafe { GetCurrentProcessId() } {
+        bail!("Server parent process id refers to the current process");
+    }
+
+    use base::platform::windows::RAIIHandle;
+    let handle = unsafe { OpenProcess(SYNCHRONIZE, FALSE, parent_pid) };
+    if handle == NULL {
+        let err = io::Error::last_os_error();
+        if err.raw_os_error() == Some(ERROR_INVALID_PARAMETER as i32) {
+            return Ok(());
+        }
+        bail!("Failed to open parent process {}: {}", parent_pid, err);
+    }
+    let _handle = RAIIHandle(handle);
+    match unsafe { WaitForSingleObject(handle, INFINITE) } {
+        WAIT_OBJECT_0 => Ok(()),
+        WAIT_FAILED => bail!(
+            "Failed while waiting for parent process {}: {}",
+            parent_pid,
+            io::Error::last_os_error()
+        ),
+        status => bail!(
+            "Unexpected wait status {} for parent process {}",
+            status,
+            parent_pid
+        ),
     }
 }
 

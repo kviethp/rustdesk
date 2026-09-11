@@ -2844,6 +2844,9 @@ Future<void> onActiveWindowChanged() async {
       debugPrintStack(label: "$err");
     } finally {
       debugPrint("Start closing RustDesk...");
+      if (isWindows) {
+        await bind.mainOnMainWindowClose();
+      }
       await windowManager.setPreventClose(false);
       await windowManager.close();
       if (isMacOS) {

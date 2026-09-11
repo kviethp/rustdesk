@@ -250,11 +250,12 @@ fn make_tray() -> hbb_common::ResultType<()> {
         if let Ok(data) = ipc_receiver.try_recv() {
             match data {
                 Data::ControlledSessionCount(count) => {
-                    _tray_icon
-                        .lock()
-                        .unwrap()
-                        .as_mut()
-                        .map(|t| t.set_tooltip(Some(tooltip(count))));
+                    if let Some(tray) = _tray_icon.lock().unwrap().as_mut() {
+                        if let Err(err) = tray.set_visible(count == 0) {
+                            log::error!("Failed to update tray icon visibility: {}", err);
+                        }
+                        let _ = tray.set_tooltip(Some(tooltip(count)));
+                    }
                 }
                 _ => {}
             }

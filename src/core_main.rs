@@ -396,6 +396,14 @@ pub fn core_main() -> Option<Vec<String>> {
             return None;
         } else if args[0] == "--server" {
             log::info!("start --server with user {}", crate::username());
+            #[cfg(windows)]
+            if let Err(err) = crate::platform::windows::wait_for_server_parent_exit(&args) {
+                log::error!(
+                    "Failed to wait for the main window process to exit: {}",
+                    err
+                );
+                return None;
+            }
             #[cfg(target_os = "linux")]
             {
                 hbb_common::allow_err!(crate::platform::check_autostart_config());
