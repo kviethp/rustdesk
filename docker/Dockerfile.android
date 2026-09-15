@@ -1,0 +1,52 @@
+FROM ubuntu:24.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+ENV ANDROID_SDK_ROOT=/opt/android-sdk
+ENV ANDROID_HOME=/opt/android-sdk
+ENV ANDROID_NDK_HOME=/opt/android-sdk/ndk/28.0.12433566
+ENV ANDROID_NDK_ROOT=/opt/android-sdk/ndk/28.0.12433566
+ENV FLUTTER_HOME=/opt/flutter
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV PATH=$JAVA_HOME/bin:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$FLUTTER_HOME/bin:/root/.cargo/bin:$PATH
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    clang \
+    cmake \
+    curl \
+    git \
+    libclang-dev \
+    libssl-dev \
+    ninja-build \
+    openjdk-17-jdk \
+    pkg-config \
+    unzip \
+    wget \
+    zip \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Android SDK & NDK
+RUN mkdir -p ${ANDROID_SDK_ROOT}/cmdline-tools && \
+    wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdline-tools.zip && \
+    unzip -q /tmp/cmdline-tools.zip -d ${ANDROID_SDK_ROOT}/cmdline-tools && \
+    mv ${ANDROID_SDK_ROOT}/cmdline-tools/cmdline-tools ${ANDROID_SDK_ROOT}/cmdline-tools/latest && \
+    rm /tmp/cmdline-tools.zip && \
+    yes | sdkmanager --licenses && \
+    sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;28.0.12433566"
+
+# Install Rust & cargo-ndk
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.75.0 && \
+    /root/.cargo/bin/rustup target add aarch64-linux-android && \
+    /root/.cargo/bin/cargo install cargo-ndk --version 3.1.2 --locked
+
+# Install Flutter SDK
+RUN wget -q https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.24.5-stable.tar.xz -O /tmp/flutter.tar.xz && \
+    tar -xf /tmp/flutter.tar.xz -C /opt && \
+    rm /tmp/flutter.tar.xz && \
+    git config --global --add safe.directory /opt/flutter && \
+    flutter precache --android && \
+    yes | flutter doctor --android-licenses || true
+
+WORKDIR /workspace
+CMD ["/bin/bash"]

@@ -2,6 +2,8 @@
 /target
 .vscode
 .idea
+.agents/
+.ua/
 .DS_Store
 .env
 libsciter-gtk.so

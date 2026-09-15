@@ -332,36 +332,58 @@ class _RemotePageState extends State<RemotePage> with WidgetsBindingObserver {
         newValue.isNotEmpty &&
         oldValue[0] == '1' &&
         newValue[0] != '1') {
-      // clipboard
+      // clipboard paste over entire buffer
       oldValue = '';
     }
-    if (newValue.length == oldValue.length) {
-      // ?
-    } else if (newValue.length < oldValue.length) {
-      final char = 'VK_BACK';
-      inputModel.inputKey(char);
-    } else {
-      final content = newValue.substring(oldValue.length);
-      if (content.length > 1) {
-        if (oldValue != '' &&
-            content.length == 2 &&
-            (content == '""' ||
-                content == '()' ||
-                content == '[]' ||
-                content == '<>' ||
-                content == "{}" ||
-                content == '”“' ||
-                content == '《》' ||
-                content == '（）' ||
-                content == '【】')) {
-          // can not only input content[0], because when input ], [ are also auo insert, which cause ] never be input
-          bind.sessionInputString(sessionId: sessionId, value: content);
-          _openKeyboardUnlocked();
-          return;
-        }
-        bind.sessionInputString(sessionId: sessionId, value: content);
+
+    var i = newValue.length - 1;
+    for (; i >= 0 && newValue[i] != '1'; --i) {}
+    var j = oldValue.length - 1;
+    for (; j >= 0 && oldValue[j] != '1'; --j) {}
+    if (i < j) j = i;
+    var subNewValue = (j >= 0) ? newValue.substring(j + 1) : newValue;
+    var subOldValue = (j >= 0) ? oldValue.substring(j + 1) : oldValue;
+
+    // Find common prefix between subNewValue and subOldValue
+    var common = 0;
+    while (common < subOldValue.length &&
+        common < subNewValue.length &&
+        subNewValue[common] == subOldValue[common]) {
+      common++;
+    }
+
+    // Characters in oldValue that were replaced/deleted
+    var charsToDelete = subOldValue.length - common;
+    for (var k = 0; k < charsToDelete; ++k) {
+      inputModel.inputKey('VK_BACK');
+    }
+
+    // New characters added
+    var newStr = '';
+    if (subNewValue.length > common) {
+      newStr = subNewValue.substring(common);
+    }
+
+    if (newStr.isNotEmpty) {
+      if (oldValue != '' &&
+          newStr.length == 2 &&
+          (newStr == '""' ||
+              newStr == '()' ||
+              newStr == '[]' ||
+              newStr == '<>' ||
+              newStr == "{}" ||
+              newStr == '”“' ||
+              newStr == '《》' ||
+              newStr == '（）' ||
+              newStr == '【】')) {
+        bind.sessionInputString(sessionId: sessionId, value: newStr);
+        _openKeyboardUnlocked();
+        return;
+      }
+      if (newStr.length > 1) {
+        bind.sessionInputString(sessionId: sessionId, value: newStr);
       } else {
-        inputChar(content);
+        inputChar(newStr);
       }
     }
   }
