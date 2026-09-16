@@ -27,15 +27,15 @@ g_arpsystemcomponent = {
     },
     "Contact": {
         "msi": "ARPCONTACT",
-        "v": "https://github.com/rustdesk/rustdesk",
+        "v": "",
     },
     "HelpLink": {
         "msi": "ARPHELPLINK",
-        "v": "https://github.com/rustdesk/rustdesk/issues/",
+        "v": "",
     },
     "ReadMe": {
         "msi": "ARPREADME",
-        "v": "https://github.com/rustdesk/rustdesk",
+        "v": "",
     },
 }
 
@@ -81,7 +81,13 @@ def make_parser():
         help='Connection type, e.g. "incoming", "outgoing". Default is empty, means incoming-outgoing',
     )
     parser.add_argument(
-        "--app-name", type=str, default="RustDesk", help="The app name."
+        "--app-name", type=str, default="RustDesk", help="The app display name."
+    )
+    parser.add_argument(
+        "--app-exe-name", type=str, default="", help="Executable base name without .exe; defaults to app name."
+    )
+    parser.add_argument(
+        "--app-id", type=str, default="", help="Stable protocol/registry identity; defaults to lower-case app name."
     )
     parser.add_argument(
         "-v", "--version", type=str, default="", help="The app version."
@@ -228,9 +234,9 @@ def put_app_exe_on_media2():
     target = Path(sys.argv[0]).parent.joinpath("Package/Components/RustDesk.wxs")
     with open(target, "r", encoding="utf-8") as f:
         content = f.read()
-    old = '<File Id="App.exe" Name="$(var.Product).exe" KeyPath="yes" Checksum="yes">'
+    old = '<File Id="App.exe" Name="$(var.AppExeName).exe" KeyPath="yes" Checksum="yes">'
     new = (
-        '<File Id="App.exe" Name="$(var.Product).exe" KeyPath="yes" Checksum="yes"'
+        '<File Id="App.exe" Name="$(var.AppExeName).exe" KeyPath="yes" Checksum="yes"'
         f' DiskId="{PER_CUSTOMER_DISK_ID}">'
     )
     if content.count(old) != 1:
@@ -243,7 +249,10 @@ def put_app_exe_on_media2():
 
 def gen_pre_vars(args, dist_dir):
     def func(lines, index_start):
-        upgrade_code = uuid.uuid5(uuid.NAMESPACE_OID, app_name + ".exe")
+        app_exe_name = args.app_exe_name or args.app_name
+        app_id = args.app_id or args.app_name.lower()
+        upgrade_identity = (args.app_id or args.app_name) + ".exe"
+        upgrade_code = uuid.uuid5(uuid.NAMESPACE_OID, upgrade_identity)
 
         indent = g_indent_unit * 1
         to_insert_lines = [
@@ -251,7 +260,8 @@ def gen_pre_vars(args, dist_dir):
             f'{indent}<?define Manufacturer="{args.manufacturer}" ?>\n',
             f'{indent}<?define Product="{args.app_name}" ?>\n',
             f'{indent}<?define Description="{args.app_name} Installer" ?>\n',
-            f'{indent}<?define ProductLower="{args.app_name.lower()}" ?>\n',
+            f'{indent}<?define AppExeName="{app_exe_name}" ?>\n',
+            f'{indent}<?define ProductLower="{app_id}" ?>\n',
             f'{indent}<?define RegKeyRoot=".$(var.ProductLower)" ?>\n',
             f'{indent}<?define RegKeyInstall="$(var.RegKeyRoot)\\Install" ?>\n',
             f'{indent}<?define BuildDir="{dist_dir}" ?>\n',
@@ -531,6 +541,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     app_name = args.app_name
+    app_exe_name = args.app_exe_name or args.app_name
     dist_dir = Path(sys.argv[0]).parent.joinpath(args.dist_dir).resolve()
 
     if not prepare_resources():
@@ -562,7 +573,7 @@ if __name__ == "__main__":
         if not put_app_exe_on_media2():
             sys.exit(-1)
 
-    if not gen_auto_component(app_name, dist_dir, args.template):
+    if not gen_auto_component(app_exe_name, dist_dir, args.template):
         sys.exit(-1)
 
     if not gen_custom_dialog_bitmaps():
