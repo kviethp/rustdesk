@@ -1,3 +1,5 @@
+#python .\build.py --portable --flutter --hwcodec --vram
+
 #!/usr/bin/env python3
 
 import os
