@@ -51,28 +51,9 @@ jobs:
           )
           replace_exact(
               'flutter/lib/common.dart',
-              'Ignore rustdesk://config because',
-              'Ignore certleap://config because',
-          )
-          replace_exact(
-              'flutter/lib/common.dart',
-              'Ignore rustdesk://password because',
-              'Ignore certleap://password because',
-          )
-          replace_exact(
-              'flutter/lib/common.dart',
-              '// rustdesk://<connect-id>',
-              '// certleap://<connect-id>',
-          )
-          replace_exact(
-              'flutter/lib/common.dart',
-              '// rustdesk://<connect-id>/r',
-              '// certleap://<connect-id>/r',
-          )
-          replace_exact(
-              'flutter/lib/common.dart',
-              '// rustdesk://<connect-id>/r@<server>',
-              '// certleap://<connect-id>/r@<server>',
+              'rustdesk://',
+              'certleap://',
+              expected=5,
           )
           replace_exact(
               'libs/base/protos/message.proto',
