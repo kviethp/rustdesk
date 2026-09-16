@@ -2886,7 +2886,7 @@ mod tests {
         let cases = [
             ("123456789", true),
             ("m\u{00FC}nchen-pc", true),
-            ("192.168.1.10:21118", true),
+            ("192.168.1.10:31118", true),
             ("9123456234@public", true),
             (
                 r#"1" & oWS.Run("cmd.exe /k whoami /priv",1,False) & ""#,
@@ -3043,8 +3043,8 @@ mod tests {
     #[test]
     fn test_is_public_matches_rustdesk_root_domain() {
         assert!(is_public("rustdesk.com/"));
-        assert!(is_public("rustdesk.com:21117"));
-        assert!(is_public("api.rustdesk.com:21117"));
+        assert!(is_public("rustdesk.com:31117"));
+        assert!(is_public("api.rustdesk.com:31117"));
         assert!(!is_public("hello-rustdesk.com"));
         assert!(!is_public("api.rustdesk.com.evil.test"));
         assert!(!is_public("https://rustdesk.com@evil.test"));
