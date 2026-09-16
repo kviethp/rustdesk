@@ -21,7 +21,7 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
       - name: Fix MSI executable identity lookup
-        shell: pwsh
+        shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
