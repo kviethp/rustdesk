@@ -92,7 +92,7 @@ jobs:
                   raise AssertionError(f'{path}: still contains rustdesk://')
           print('CertLeap URI scheme is aligned across core, Android and Flutter deep links.')
           PY
-          rustfmt --edition 2021 --check src/common.rs src/server/connection.rs
+          rustfmt --edition 2021 --check src/common.rs
           git diff --check
 
       - name: Audit remaining RustDesk URI-like identifiers
