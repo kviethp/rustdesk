@@ -1,0 +1,277 @@
+name: CertLeap phase 2 rebrand
+
+on:
+  push:
+    branches:
+      - certleap-rebrand-phase2
+
+permissions:
+  contents: write
+
+jobs:
+  rebrand:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout phase 2 branch
+        uses: actions/checkout@v4
+        with:
+          ref: refs/heads/certleap-rebrand-phase2
+          fetch-depth: 0
+
+      - name: RED - prove phase 2 branding checks fail before implementation
+        shell: bash
+        run: |
+          set +e
+          python3 - <<'PY'
+          from pathlib import Path
+
+          failures = []
+          def require(path, needle):
+              text = Path(path).read_text(encoding='utf-8')
+              if needle not in text:
+                  failures.append(f'{path}: missing {needle!r}')
+          def forbid(path, needle):
+              text = Path(path).read_text(encoding='utf-8')
+              if needle in text:
+                  failures.append(f'{path}: still contains {needle!r}')
+
+          require('flutter/android/app/build.gradle', 'applicationId "com.certleap.academy"')
+          require('flutter/windows/CMakeLists.txt', 'set(BINARY_NAME "certleap_academy")')
+          forbid('flutter/lib/mobile/pages/settings_page.dart', 'https://rustdesk.com/')
+          forbid('flutter/lib/mobile/pages/settings_page.dart', 'About RustDesk')
+          forbid('flutter/lib/mobile/pages/settings_page.dart', 'Keep RustDesk background service')
+          forbid('flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainActivity.kt', '.rustdesk-')
+          require('res/msi/preprocess.py', '--app-id')
+          require('.github/workflows/flutter-build.yml', 'certleap-academy-${{ env.VERSION }}')
+          require('.github/workflows/flutter-build.yml', '--app-name "CertLeap Academy" --app-exe-name certleap_academy --app-id certleap')
+
+          if failures:
+              print('Expected RED state:')
+              for item in failures:
+                  print(' -', item)
+              raise SystemExit(1)
+          print('Phase 2 checks are already green.')
+          PY
+          status=$?
+          if [ "$status" -eq 0 ]; then
+            echo "Phase 2 was already green before this run."
+          else
+            echo "Observed expected RED state before implementation."
+          fi
+          exit 0
+
+      - name: Apply targeted CertLeap phase 2 changes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def read(path):
+              return Path(path).read_text(encoding='utf-8')
+
+          def write(path, text):
+              Path(path).write_text(text, encoding='utf-8')
+
+          def replace_once(path, old, new):
+              text = read(path)
+              count = text.count(old)
+              if count == 1:
+                  write(path, text.replace(old, new, 1))
+                  print(f'updated {path}')
+                  return
+              if count == 0 and new in text:
+                  print(f'already updated {path}')
+                  return
+              raise RuntimeError(f'{path}: expected exactly one occurrence of {old!r}, found {count}')
+
+          def replace_all(path, old, new, minimum=1):
+              text = read(path)
+              count = text.count(old)
+              if count >= minimum:
+                  write(path, text.replace(old, new))
+                  print(f'updated {path}: {count} replacements')
+                  return
+              if count == 0 and new in text:
+                  print(f'already updated {path}')
+                  return
+              raise RuntimeError(f'{path}: expected at least {minimum} occurrences of {old!r}, found {count}')
+
+          # Flutter settings: remove upstream marketing/privacy links while keeping the rows usable.
+          settings = 'flutter/lib/mobile/pages/settings_page.dart'
+          replace_once(settings, "import 'package:url_launcher/url_launcher.dart';\n", '')
+          replace_once(settings, "import 'package:url_launcher/url_launcher_string.dart';\n", '')
+          replace_once(settings, "\nconst url = 'https://rustdesk.com/';\n", '\n')
+          replace_once(settings, 'Keep RustDesk background service', 'Keep CertLeap Academy background service')
+          replace_once(
+              settings,
+              '''            SettingsTile(\n                onPressed: (context) async {\n                  await launchUrl(Uri.parse(url));\n                },\n                title: Text(translate("Version: ") + version),\n                value: Padding(\n                  padding: EdgeInsets.symmetric(vertical: 8),\n                  child: Text('rustdesk.com',\n                      style: TextStyle(\n                        decoration: TextDecoration.underline,\n                      )),\n                ),\n                leading: Icon(Icons.info)),\n''',
+              '''            SettingsTile(\n                title: Text(translate("Version: ") + version),\n                value: Padding(\n                  padding: EdgeInsets.symmetric(vertical: 8),\n                  child: Text('CertLeap Academy'),\n                ),\n                leading: Icon(Icons.info)),\n''')
+          replace_once(
+              settings,
+              '''            SettingsTile(\n              title: Text(translate("Privacy Statement")),\n              onPressed: (context) =>\n                  launchUrlString('https://rustdesk.com/privacy.html'),\n              leading: Icon(Icons.privacy_tip),\n            )\n''',
+              '''            SettingsTile(\n              title: Text(translate("Privacy Statement")),\n              onPressed: null,\n              leading: Icon(Icons.privacy_tip),\n            )\n''')
+          replace_once(settings, "title: Text(translate('About RustDesk'))", "title: Text(translate('About CertLeap Academy'))")
+          replace_once(
+              settings,
+              '''        InkWell(\n            onTap: () async {\n              const url = 'https://rustdesk.com/';\n              await launchUrl(Uri.parse(url));\n            },\n            child: Padding(\n              padding: EdgeInsets.symmetric(vertical: 8),\n              child: Text('rustdesk.com',\n                  style: TextStyle(\n                    decoration: TextDecoration.underline,\n                  )),\n            )),\n''',
+              '')
+
+          # Android file-transfer temp names are no longer branded as RustDesk.
+          replace_all(
+              'flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainActivity.kt',
+              '.rustdesk-', '.certleap-')
+
+          # Windows Flutter runner identity. Native Rust library/crate names deliberately stay unchanged.
+          replace_once('flutter/windows/CMakeLists.txt', 'project(rustdesk LANGUAGES CXX)', 'project(certleap_academy LANGUAGES CXX)')
+          replace_once('flutter/windows/CMakeLists.txt', 'set(BINARY_NAME "rustdesk")', 'set(BINARY_NAME "certleap_academy")')
+
+          # Windows portable pack paths and user-facing output names.
+          build = 'build.py'
+          replace_once(
+              build,
+              "f'python ./generate.py -f ../../{flutter_build_dir_2} -o . -e ../../{flutter_build_dir_2}/rustdesk.exe'",
+              "f'python ./generate.py -f ../../{flutter_build_dir_2} -o . -e ../../{flutter_build_dir_2}/certleap_academy.exe'")
+          replace_all(build, 'rustdesk_portable.exe', 'certleap_academy_portable.exe', minimum=1)
+          replace_all(build, 'rustdesk-{version}-install.exe', 'certleap-academy-{version}-install.exe', minimum=1)
+
+          # MSI: blank upstream support links and separate display name, executable name, and app/protocol id.
+          msi = 'res/msi/preprocess.py'
+          replace_once(msi, '"v": "https://github.com/rustdesk/rustdesk",', '"v": "",')
+          replace_once(msi, '"v": "https://github.com/rustdesk/rustdesk/issues/",', '"v": "",')
+          # ReadMe has the same upstream URL as Contact; after the first replacement one remains.
+          replace_once(msi, '"v": "https://github.com/rustdesk/rustdesk",', '"v": "",')
+          replace_once(
+              msi,
+              '''    parser.add_argument(\n        "--app-name", type=str, default="RustDesk", help="The app name."\n    )\n''',
+              '''    parser.add_argument(\n        "--app-name", type=str, default="RustDesk", help="The app display name."\n    )\n    parser.add_argument(\n        "--app-exe-name", type=str, default="", help="Executable base name without .exe; defaults to app name."\n    )\n    parser.add_argument(\n        "--app-id", type=str, default="", help="Stable protocol/registry identity; defaults to lower-case app name."\n    )\n''')
+          replace_once(
+              msi,
+              '        upgrade_code = uuid.uuid5(uuid.NAMESPACE_OID, app_name + ".exe")',
+              '''        app_exe_name = args.app_exe_name or args.app_name\n        app_id = args.app_id or args.app_name.lower()\n        upgrade_identity = (args.app_id or args.app_name) + ".exe"\n        upgrade_code = uuid.uuid5(uuid.NAMESPACE_OID, upgrade_identity)''')
+          replace_once(
+              msi,
+              '            f\'{indent}<?define ProductLower="{args.app_name.lower()}" ?>\\n\',',
+              '            f\'{indent}<?define AppExeName="{app_exe_name}" ?>\\n\',\n            f\'{indent}<?define ProductLower="{app_id}" ?>\\n\',')
+          replace_once(
+              msi,
+              '    app_name = args.app_name\n    dist_dir = Path(sys.argv[0]).parent.joinpath(args.dist_dir).resolve()',
+              '    app_name = args.app_name\n    app_exe_name = args.app_exe_name or args.app_name\n    dist_dir = Path(sys.argv[0]).parent.joinpath(args.dist_dir).resolve()')
+          replace_once(
+              msi,
+              '    if not gen_auto_component(app_name, dist_dir, args.template):',
+              '    if not gen_auto_component(app_exe_name, dist_dir, args.template):')
+
+          # Every MSI executable path should use the executable identity, not the display product name.
+          for path in Path('res/msi').rglob('*'):
+              if path.is_file() and path.suffix.lower() in {'.py', '.wxs', '.wxi'}:
+                  text = path.read_text(encoding='utf-8')
+                  if '$(var.Product).exe' in text:
+                      path.write_text(text.replace('$(var.Product).exe', '$(var.AppExeName).exe'), encoding='utf-8')
+                      print(f'updated {path}')
+
+          # CI/release names for Windows and Android. Internal build dirs and librustdesk stay upstream-compatible.
+          wf = '.github/workflows/flutter-build.yml'
+          replace_once(wf, 'name: Build the flutter version of the RustDesk', 'name: Build the flutter version of CertLeap Academy')
+          replace_all(wf, 'rustdesk.sbom.json', 'certleap-academy.sbom.json', minimum=1)
+          replace_once(wf, '-e ../../rustdesk/rustdesk.exe', '-e ../../rustdesk/certleap_academy.exe')
+          replace_once(
+              wf,
+              'python preprocess.py --arp -d ../../rustdesk',
+              'python preprocess.py --arp -d ../../rustdesk --app-name "CertLeap Academy" --app-exe-name certleap_academy --app-id certleap')
+          replace_once(wf, 'mv ./rustdesk-msi-template/rustdesk.exe ./rustdesk-msi-template/RDAPPNAM.exe', 'mv ./rustdesk-msi-template/certleap_academy.exe ./rustdesk-msi-template/RDAPPNAM.exe')
+          replace_all(wf, 'name: rustdesk-unsigned-windows-${{ matrix.job.arch }}', 'name: certleap-academy-unsigned-windows-${{ matrix.job.arch }}', minimum=1)
+          replace_all(wf, 'name: rustdesk-unsigned-msi-template-${{ matrix.job.arch }}', 'name: certleap-academy-unsigned-msi-template-${{ matrix.job.arch }}', minimum=1)
+          replace_all(wf, './SignOutput/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.exe', './SignOutput/certleap-academy-${{ env.VERSION }}-${{ matrix.job.arch }}.exe', minimum=1)
+          replace_all(wf, './SignOutput/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}-sciter.exe', './SignOutput/certleap-academy-${{ env.VERSION }}-${{ matrix.job.arch }}-sciter.exe', minimum=1)
+          replace_all(wf, './SignOutput/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.msi', './SignOutput/certleap-academy-${{ env.VERSION }}-${{ matrix.job.arch }}.msi', minimum=1)
+          replace_all(wf, './SignOutput/rustdesk-*.msi', './SignOutput/certleap-academy-*.msi', minimum=1)
+          replace_all(wf, './SignOutput/rustdesk-*.exe', './SignOutput/certleap-academy-*.exe', minimum=1)
+          replace_all(wf, 'rustdesk-template-${{ matrix.job.arch }}.msi', 'certleap-academy-template-${{ matrix.job.arch }}.msi', minimum=1)
+
+          # Android APK filenames/artifact display names only; JNI library names remain librustdesk.so.
+          replace_all(wf, '../rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk', '../certleap-academy-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk', minimum=1)
+          replace_all(wf, 'mv ../rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk .', 'mv ../certleap-academy-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk .', minimum=1)
+          replace_all(wf, 'name: rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.apk', 'name: certleap-academy-${{ env.VERSION }}-${{ matrix.job.arch }}.apk', minimum=1)
+          replace_all(wf, 'signed-apk/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.apk', 'signed-apk/certleap-academy-${{ env.VERSION }}-${{ matrix.job.arch }}.apk', minimum=1)
+          replace_all(wf, 'signed-apk/rustdesk-${{ env.VERSION }}-universal${{ env.suffix }}.apk', 'signed-apk/certleap-academy-${{ env.VERSION }}-universal${{ env.suffix }}.apk', minimum=1)
+          replace_all(wf, 'build rustdesk android', 'build CertLeap Academy android', minimum=1)
+
+          PY
+
+      - name: GREEN - verify phase 2 branding and syntax
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          failures = []
+          def require(path, needle):
+              text = Path(path).read_text(encoding='utf-8')
+              if needle not in text:
+                  failures.append(f'{path}: missing {needle!r}')
+          def forbid(path, needle):
+              text = Path(path).read_text(encoding='utf-8')
+              if needle in text:
+                  failures.append(f'{path}: still contains {needle!r}')
+
+          require('flutter/android/app/build.gradle', 'applicationId "com.certleap.academy"')
+          require('flutter/android/app/src/main/AndroidManifest.xml', '<data android:scheme="certleap" />')
+          require('flutter/windows/CMakeLists.txt', 'project(certleap_academy LANGUAGES CXX)')
+          require('flutter/windows/CMakeLists.txt', 'set(BINARY_NAME "certleap_academy")')
+          require('flutter/windows/runner/Runner.rc', 'VALUE "ProductName", "CertLeap Academy"')
+          require('flutter/lib/mobile/pages/settings_page.dart', 'About CertLeap Academy')
+          require('flutter/lib/mobile/pages/settings_page.dart', 'Keep CertLeap Academy background service')
+          forbid('flutter/lib/mobile/pages/settings_page.dart', 'rustdesk.com')
+          forbid('flutter/lib/mobile/pages/settings_page.dart', 'About RustDesk')
+          forbid('flutter/lib/mobile/pages/settings_page.dart', 'Keep RustDesk background service')
+          forbid('flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainActivity.kt', '.rustdesk-')
+          require('res/msi/preprocess.py', '"--app-exe-name"')
+          require('res/msi/preprocess.py', '"--app-id"')
+          require('res/msi/preprocess.py', 'f\'{indent}<?define AppExeName="{app_exe_name}" ?>')
+          require('.github/workflows/flutter-build.yml', '--app-name "CertLeap Academy" --app-exe-name certleap_academy --app-id certleap')
+          require('.github/workflows/flutter-build.yml', 'certleap-academy-${{ env.VERSION }}-${{ matrix.job.arch }}.msi')
+          require('.github/workflows/flutter-build.yml', 'certleap-academy-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.apk')
+
+          for path in Path('res/msi').rglob('*'):
+              if path.is_file() and path.suffix.lower() in {'.py', '.wxs', '.wxi'}:
+                  text = path.read_text(encoding='utf-8')
+                  if '$(var.Product).exe' in text:
+                      failures.append(f'{path}: MSI exe path still coupled to Product display name')
+
+          if failures:
+              print('GREEN verification failed:')
+              for item in failures:
+                  print(' -', item)
+              raise SystemExit(1)
+          print('Phase 2 branding checks passed.')
+          PY
+          python3 -m py_compile build.py res/msi/preprocess.py
+          git diff --check
+
+      - name: Audit remaining upstream branding in app-facing areas
+        shell: bash
+        run: |
+          echo '--- flutter/lib rustdesk.com / explicit RustDesk UI strings ---'
+          grep -RniE 'rustdesk\.com|About RustDesk|Keep RustDesk|Text\([^)]*RustDesk|title:.*RustDesk' flutter/lib || true
+          echo '--- Android explicit RustDesk strings excluding native library names ---'
+          grep -RniE 'RustDesk|rustdesk\.com' flutter/android/app/src/main --exclude='*.so' || true
+          echo '--- MSI upstream URLs / Product.exe coupling ---'
+          grep -RniE 'https?://[^ ]*rustdesk|\$\(var\.Product\)\.exe' res/msi || true
+
+      - name: Commit phase 2 changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add flutter/lib/mobile/pages/settings_page.dart \
+                  flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainActivity.kt \
+                  flutter/windows/CMakeLists.txt \
+                  build.py \
+                  res/msi \
+                  .github/workflows/flutter-build.yml
+          if git diff --cached --quiet; then
+            echo "No phase 2 source changes to commit"
+          else
+            git commit -m "chore: complete CertLeap phase 2 app identity"
+            git push origin HEAD:refs/heads/certleap-rebrand-phase2
+          fi
