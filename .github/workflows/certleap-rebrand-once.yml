@@ -36,19 +36,13 @@ jobs:
               Path('flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainActivity.kt'): [
                   ('.rustdesk-', '.certleap-'),
               ],
-              Path('.github/workflows/flutter-build.yml'): [
-                  ('name: Build the flutter version of the RustDesk', 'name: Build the flutter version of CertLeap Academy'),
-                  ('Patch RustDesk sources for Flutter 3.44', 'Patch CertLeap Academy sources for Flutter 3.44'),
-                  ('# Windows: build RustDesk', '# Windows: build CertLeap Academy'),
-              ],
           }
 
           for path, pairs in replacements.items():
               text = path.read_text(encoding='utf-8')
               original = text
               for old, new in pairs:
-                  if old in text:
-                      text = text.replace(old, new)
+                  text = text.replace(old, new)
               if text != original:
                   path.write_text(text, encoding='utf-8')
 
@@ -75,8 +69,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add flutter/lib/mobile/pages/settings_page.dart \
-                  flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainActivity.kt \
-                  .github/workflows/flutter-build.yml
+                  flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainActivity.kt
           git add -f certleap-rebrand-audit.txt
           if git diff --cached --quiet; then
             echo "No changes to commit"
