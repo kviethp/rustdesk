@@ -3741,12 +3741,15 @@ Widget loadPowered(BuildContext context) {
     cursor: SystemMouseCursors.click,
     child: GestureDetector(
       onTap: () {
-        launchUrl(Uri.parse('https://rustdesk.com'));
+        const url = '';
+        if (url.isNotEmpty) {
+          launchUrl(Uri.parse(url));
+        }
       },
       child: Opacity(
           opacity: 0.5,
           child: Text(
-            translate("powered_by_me"),
+            "CertLeap - Your Path to Certification",
             overflow: TextOverflow.clip,
             style: Theme.of(context)
                 .textTheme
