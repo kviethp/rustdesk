@@ -1,0 +1,29 @@
+name: CertLeap URI identity audit
+
+on:
+  push:
+    branches:
+      - certleap-rebrand-phase2
+    paths:
+      - .github/workflows/certleap-uri-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/heads/certleap-rebrand-phase2
+          fetch-depth: 1
+      - name: Trace URI and protocol identity
+        shell: bash
+        run: |
+          echo '=== URI prefix symbols ==='
+          grep -RniE 'mainUriPrefixSync|uri[_A-Za-z]*prefix|URI_PREFIX|uri-prefix' src flutter libs res 2>/dev/null | head -n 300 || true
+          echo '=== rustdesk URI literals ==='
+          grep -RniE 'rustdesk://|rustdesk:' src flutter libs res 2>/dev/null | head -n 300 || true
+          echo '=== certleap URI literals ==='
+          grep -RniE 'certleap://|certleap:' src flutter libs res 2>/dev/null | head -n 300 || true
