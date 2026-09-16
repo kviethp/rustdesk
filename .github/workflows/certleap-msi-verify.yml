@@ -42,8 +42,8 @@ jobs:
       - name: Prepare minimal CertLeap distribution
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path res/msi/verify-dist | Out-Null
-          $source = @'
+          dotnet new console --framework net8.0 --output verify-helper --force
+          @'
           using System;
           public class Program {
               public static void Main(string[] args) {
@@ -54,8 +54,10 @@ jobs:
                   }
               }
           }
-          '@
-          Add-Type -TypeDefinition $source -OutputAssembly res/msi/verify-dist/certleap_academy.exe -OutputType ConsoleApplication
+          '@ | Set-Content -Path verify-helper/Program.cs
+          dotnet publish verify-helper/verify-helper.csproj -c Release -r win-x64 --self-contained false -p:UseAppHost=true -o verify-helper/out
+          New-Item -ItemType Directory -Force -Path res/msi/verify-dist | Out-Null
+          Copy-Item verify-helper/out/verify-helper.exe res/msi/verify-dist/certleap_academy.exe
           Set-Content -Path res/msi/verify-dist/flutter_windows.dll -Value 'verification placeholder'
       - name: Preprocess MSI with CertLeap identity
         working-directory: res/msi
