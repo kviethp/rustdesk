@@ -73,6 +73,7 @@ jobs:
         working-directory: res/msi
         shell: pwsh
         run: |
+          nuget restore msi.sln
           msbuild msi.sln /restore /m /p:Configuration=Release /p:Platform=x64
           $msi = Get-ChildItem -Recurse -Filter *.msi | Select-Object -First 1
           if (-not $msi) { throw 'MSI build completed without producing an .msi file' }
