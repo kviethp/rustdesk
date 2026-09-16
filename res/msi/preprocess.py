@@ -356,7 +356,7 @@ def gen_native_arp_properties():
             f"{indent}<!--https://learn.microsoft.com/en-us/windows/win32/msi/property-reference-->\n"
         )
         for _, v in g_arpsystemcomponent.items():
-            if "msi" in v and "v" in v:
+            if "msi" in v and v.get("v") not in (None, ""):
                 lines_new.append(
                     f'{indent}<Property Id={quoteattr(str(v["msi"]))} '
                     f'Value={quoteattr(str(v["v"]))} />\n'
@@ -470,8 +470,8 @@ def prepare_resources():
         return False
 
 
-def init_global_vars(dist_dir, app_name, args):
-    dist_app = dist_dir.joinpath(app_name + ".exe")
+def init_global_vars(dist_dir, app_exe_name, args):
+    dist_app = dist_dir.joinpath(app_exe_name + ".exe")
 
     def read_process_output(args):
         process = subprocess.Popen(
@@ -547,7 +547,7 @@ if __name__ == "__main__":
     if not prepare_resources():
         sys.exit(-1)
 
-    if not init_global_vars(dist_dir, app_name, args):
+    if not init_global_vars(dist_dir, app_exe_name, args):
         sys.exit(-1)
 
     update_license_file(app_name)
