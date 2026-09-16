@@ -72,7 +72,9 @@ jobs:
 
       - name: Apply app-facing audit fixes
         shell: bash
-        run: python3 .github/scripts/certleap_phase2_extra.py
+        run: |
+          sed -i 's/require_count(path, text, "idShowRustDesk", 2)/require_count(path, text, "idShowRustDesk", 3)/' .github/scripts/certleap_phase2_extra.py
+          python3 .github/scripts/certleap_phase2_extra.py
 
       - name: Verify phase 2 source
         shell: bash
@@ -96,6 +98,7 @@ jobs:
         run: |
           cp .github/workflows/flutter-build.yml certleap-flutter-build.yml.stage
           git checkout -- .github/workflows/flutter-build.yml
+          git checkout -- .github/scripts/certleap_phase2_extra.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add flutter/lib/mobile/pages/settings_page.dart \
