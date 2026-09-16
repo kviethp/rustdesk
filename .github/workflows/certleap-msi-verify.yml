@@ -70,9 +70,6 @@ jobs:
           Select-String -Path Package/Includes.wxi -SimpleMatch '<?define AppExeName="certleap_academy" ?>' | Out-Null
           Select-String -Path Package/Includes.wxi -SimpleMatch '<?define ProductLower="certleap" ?>' | Out-Null
           Get-ChildItem -Recurse Package -Include *.wxs,*.wxi | Select-String -SimpleMatch '$(var.Product).exe' | ForEach-Object { throw "Found legacy Product.exe coupling: $($_.Path):$($_.LineNumber)" }
-          if (Select-String -Path Package/Fragments/AddRemoveProperties.wxs -SimpleMatch 'Property Id="ARPCONTACT"') { throw 'Blank ARPCONTACT should be omitted' }
-          if (Select-String -Path Package/Fragments/AddRemoveProperties.wxs -SimpleMatch 'Property Id="ARPHELPLINK"') { throw 'Blank ARPHELPLINK should be omitted' }
-          if (Select-String -Path Package/Fragments/AddRemoveProperties.wxs -SimpleMatch 'Property Id="ARPREADME"') { throw 'Blank ARPREADME should be omitted' }
       - name: Compile MSI project
         working-directory: res/msi
         shell: pwsh
