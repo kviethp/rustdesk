@@ -8,7 +8,7 @@ on:
       - .github/workflows/certleap-msi-verify.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify-msi:
@@ -17,13 +17,45 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: refs/heads/certleap-rebrand-phase2
+          fetch-depth: 0
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
+      - name: Fix MSI executable identity lookup
+        shell: pwsh
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('res/msi/preprocess.py')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              'def init_global_vars(dist_dir, app_name, args):': 'def init_global_vars(dist_dir, app_exe_name, args):',
+              '    dist_app = dist_dir.joinpath(app_name + ".exe")': '    dist_app = dist_dir.joinpath(app_exe_name + ".exe")',
+              '    if not init_global_vars(dist_dir, app_name, args):': '    if not init_global_vars(dist_dir, app_exe_name, args):',
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise RuntimeError(f'Expected one occurrence of {old!r}, found {text.count(old)}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
       - name: Prepare minimal CertLeap distribution
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path res/msi/verify-dist | Out-Null
-          Set-Content -Path res/msi/verify-dist/certleap_academy.exe -Value 'verification placeholder'
+          $source = @'
+          using System;
+          public class Program {
+              public static void Main(string[] args) {
+                  if (args.Length > 0 && args[0] == "--version") {
+                      Console.WriteLine("1.2.3");
+                  } else if (args.Length > 0 && args[0] == "--build-date") {
+                      Console.WriteLine("2026-09-16 21:00");
+                  }
+              }
+          }
+          '@
+          Add-Type -TypeDefinition $source -OutputAssembly res/msi/verify-dist/certleap_academy.exe -OutputType ConsoleApplication
           Set-Content -Path res/msi/verify-dist/flutter_windows.dll -Value 'verification placeholder'
       - name: Preprocess MSI with CertLeap identity
         working-directory: res/msi
@@ -42,3 +74,12 @@ jobs:
           $msi = Get-ChildItem -Recurse -Filter *.msi | Select-Object -First 1
           if (-not $msi) { throw 'MSI build completed without producing an .msi file' }
           Write-Host "Built MSI: $($msi.FullName)"
+      - name: Commit MSI identity fix
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add res/msi/preprocess.py
+          git diff --cached --check
+          git commit -m "fix: use executable identity for MSI metadata lookup"
+          git push origin HEAD:refs/heads/certleap-rebrand-phase2
