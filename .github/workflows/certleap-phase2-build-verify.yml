@@ -8,65 +8,12 @@ on:
       - .github/workflows/certleap-phase2-build-verify.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  android-package:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: refs/heads/certleap-rebrand-phase2
-          submodules: recursive
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: '3.24.5'
-          cache: true
-      - name: Resolve Flutter dependencies
-        working-directory: flutter
-        run: flutter pub get
-      - name: Build Android APK
-        working-directory: flutter
-        run: flutter build apk --debug --target-platform android-arm64
-      - name: Verify Android identity and output
-        shell: bash
-        run: |
-          test -f flutter/build/app/outputs/flutter-apk/app-debug.apk
-          grep -F 'applicationId "com.certleap.academy"' flutter/android/app/build.gradle
-          grep -F '<string name="app_name">CertLeap Academy</string>' flutter/android/app/src/main/res/values/strings.xml
-          grep -F '<data android:scheme="certleap" />' flutter/android/app/src/main/AndroidManifest.xml
-          echo 'Android CertLeap package build verified.'
-
-  windows-package:
-    runs-on: windows-2022
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: refs/heads/certleap-rebrand-phase2
-          submodules: recursive
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: '3.24.5'
-          cache: true
-      - name: Resolve Flutter dependencies
-        working-directory: flutter
-        run: flutter pub get
-      - name: Provide native runtime placeholder for packaging-only build
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path target/release | Out-Null
-          New-Item -ItemType File -Force -Path target/release/librustdesk.dll | Out-Null
-      - name: Build Windows application
-        working-directory: flutter
-        run: flutter build windows --release
-      - name: Verify Windows identity and output
-        shell: pwsh
-        run: |
-          $exe = 'flutter/build/windows/x64/runner/Release/certleap_academy.exe'
-          if (-not (Test-Path $exe)) { throw "Missing $exe" }
-          Select-String -Path flutter/windows/CMakeLists.txt -SimpleMatch 'set(BINARY_NAME "certleap_academy")' | Out-Null
-          Select-String -Path flutter/windows/runner/Runner.rc -SimpleMatch 'VALUE "ProductName", "CertLeap Academy"' | Out-Null
-          Select-String -Path .github/workflows/flutter-build.yml -SimpleMatch '--app-name "CertLeap Academy" --app-exe-name certleap_academy --app-id certleap' | Out-Null
-          Write-Host 'Windows CertLeap executable build verified.'
+  run-ci:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/flutter-build.yml
+    with:
+      upload-artifact: false
