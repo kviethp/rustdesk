@@ -112,9 +112,9 @@ jobs:
                   flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/FloatingWindowService.kt \
                   flutter/windows/CMakeLists.txt \
                   build.py \
-                  res/msi \
-                  certleap-flutter-build.yml.stage
+                  res/msi
           git diff --cached --stat
           git diff --cached --check
+          git add certleap-flutter-build.yml.stage
           git commit -m "chore: complete CertLeap phase 2 app identity"
           git push origin HEAD:refs/heads/certleap-rebrand-phase2
