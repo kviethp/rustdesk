@@ -1,0 +1,107 @@
+name: CertLeap phase 2 retry
+
+on:
+  push:
+    branches:
+      - certleap-rebrand-phase2
+    paths:
+      - .github/workflows/certleap-phase2-retry.yml
+
+permissions:
+  contents: write
+
+jobs:
+  rebrand:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout phase 2 branch
+        uses: actions/checkout@v4
+        with:
+          ref: refs/heads/certleap-rebrand-phase2
+          fetch-depth: 0
+
+      - name: Recover tested patch scripts as runtime files
+        shell: bash
+        run: |
+          git show ae438900012fddfa1bdba789b9f1722f10845e26:.github/workflows/certleap-phase2-once.yml > /tmp/phase2-source.yml
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path('/tmp/phase2-source.yml').read_text(encoding='utf-8')
+
+          def extract_step(name, next_name):
+              start_marker = f'      - name: {name}\n'
+              next_marker = f'      - name: {next_name}\n'
+              start = source.index(start_marker)
+              run_start = source.index('        run: |\n', start) + len('        run: |\n')
+              end = source.index(next_marker, run_start)
+              raw = source[run_start:end]
+              lines = []
+              for line in raw.splitlines():
+                  if line.startswith('          '):
+                      lines.append(line[10:])
+                  elif not line.strip():
+                      lines.append('')
+                  else:
+                      raise RuntimeError(f'Unexpected indentation in {name}: {line!r}')
+              return '\n'.join(lines) + '\n'
+
+          apply_script = extract_step(
+              'Apply targeted CertLeap phase 2 changes',
+              'GREEN - verify phase 2 branding and syntax',
+          )
+          duplicate_url = '''replace_once(msi, '\"v\": \"https://github.com/rustdesk/rustdesk\",', '\"v\": \"\",')'''
+          replacement = '''replace_all(msi, '\"v\": \"https://github.com/rustdesk/rustdesk\",', '\"v\": \"\",', minimum=2)'''
+          count = apply_script.count(duplicate_url)
+          if count != 2:
+              raise RuntimeError(f'Expected two duplicate RustDesk ARP URL replacements, found {count}')
+          apply_script = apply_script.replace(duplicate_url, replacement)
+
+          Path('/tmp/apply-phase2.sh').write_text(apply_script, encoding='utf-8')
+          Path('/tmp/verify-phase2.sh').write_text(
+              extract_step(
+                  'GREEN - verify phase 2 branding and syntax',
+                  'Audit remaining upstream branding in app-facing areas',
+              ),
+              encoding='utf-8',
+          )
+          Path('/tmp/audit-phase2.sh').write_text(
+              extract_step(
+                  'Audit remaining upstream branding in app-facing areas',
+                  'Commit phase 2 changes',
+              ),
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Apply targeted CertLeap phase 2 changes
+        shell: bash
+        run: bash /tmp/apply-phase2.sh
+
+      - name: Verify phase 2 branding and syntax
+        shell: bash
+        run: bash /tmp/verify-phase2.sh
+
+      - name: Audit remaining upstream branding in app-facing areas
+        shell: bash
+        run: bash /tmp/audit-phase2.sh
+
+      - name: Commit phase 2 source changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add flutter/lib/mobile/pages/settings_page.dart \
+                  flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainActivity.kt \
+                  flutter/windows/CMakeLists.txt \
+                  build.py \
+                  res/msi \
+                  .github/workflows/flutter-build.yml
+          git diff --cached --stat
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "No phase 2 source changes to commit"
+          else
+            git commit -m "chore: complete CertLeap phase 2 app identity"
+            git push origin HEAD:refs/heads/certleap-rebrand-phase2
+          fi
