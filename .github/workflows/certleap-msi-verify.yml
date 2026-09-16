@@ -1,0 +1,44 @@
+name: CertLeap MSI identity verification
+
+on:
+  push:
+    branches:
+      - certleap-rebrand-phase2
+    paths:
+      - .github/workflows/certleap-msi-verify.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify-msi:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/heads/certleap-rebrand-phase2
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+      - name: Prepare minimal CertLeap distribution
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path res/msi/verify-dist | Out-Null
+          Set-Content -Path res/msi/verify-dist/certleap_academy.exe -Value 'verification placeholder'
+          Set-Content -Path res/msi/verify-dist/flutter_windows.dll -Value 'verification placeholder'
+      - name: Preprocess MSI with CertLeap identity
+        working-directory: res/msi
+        shell: pwsh
+        run: |
+          python preprocess.py --arp -d verify-dist --app-name "CertLeap Academy" --app-exe-name certleap_academy --app-id certleap
+          Select-String -Path Package/Includes.wxi -SimpleMatch '<?define Product="CertLeap Academy" ?>' | Out-Null
+          Select-String -Path Package/Includes.wxi -SimpleMatch '<?define AppExeName="certleap_academy" ?>' | Out-Null
+          Select-String -Path Package/Includes.wxi -SimpleMatch '<?define ProductLower="certleap" ?>' | Out-Null
+          Get-ChildItem -Recurse Package -Include *.wxs,*.wxi | Select-String -SimpleMatch '$(var.Product).exe' | ForEach-Object { throw "Found legacy Product.exe coupling: $($_.Path):$($_.LineNumber)" }
+      - name: Compile MSI project
+        working-directory: res/msi
+        shell: pwsh
+        run: |
+          msbuild msi.sln /restore /m /p:Configuration=Release /p:Platform=x64
+          $msi = Get-ChildItem -Recurse -Filter *.msi | Select-Object -First 1
+          if (-not $msi) { throw 'MSI build completed without producing an .msi file' }
+          Write-Host "Built MSI: $($msi.FullName)"
