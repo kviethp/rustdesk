@@ -76,8 +76,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add flutter/lib/mobile/pages/settings_page.dart \
                   flutter/android/app/src/main/kotlin/com/carriez/flutter_hbb/MainActivity.kt \
-                  .github/workflows/flutter-build.yml \
-                  certleap-rebrand-audit.txt
+                  .github/workflows/flutter-build.yml
+          git add -f certleap-rebrand-audit.txt
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
