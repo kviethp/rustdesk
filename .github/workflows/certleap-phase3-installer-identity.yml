@@ -55,6 +55,24 @@ jobs:
             }
           }
 
+      - name: Verify Windows package naming
+        shell: pwsh
+        run: |
+          $buildPy = Get-Content 'build.py' -Raw
+          $releaseWorkflow = Get-Content '.github/workflows/flutter-build.yml' -Raw
+          if ($buildPy -notmatch 'certleap-academy-\{version\}-portable\.exe') {
+            Write-Error 'build.py still does not identify the self-extracting EXE as Portable.'
+            exit 1
+          }
+          if ($releaseWorkflow -notmatch 'certleap-academy-\$\{\{ env\.VERSION \}\}-\$\{\{ matrix\.job\.arch \}\}-portable\.exe') {
+            Write-Error 'flutter-build.yml still publishes the self-extracting EXE without the Portable suffix.'
+            exit 1
+          }
+          if ($releaseWorkflow -notmatch 'certleap-academy-\$\{\{ env\.VERSION \}\}-\$\{\{ matrix\.job\.arch \}\}\.msi') {
+            Write-Error 'MSI setup artifact naming is missing.'
+            exit 1
+          }
+
       - name: Commit verified Windows identity wiring
         shell: bash
         run: |
