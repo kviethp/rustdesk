@@ -60,6 +60,10 @@ jobs:
               exit 1
             }
           }
+          if ($source.Contains('taskkill /F /IM {app_name}.exe')) {
+            Write-Error 'Windows service install still derives the process image from the display name.'
+            exit 1
+          }
 
       - name: Verify Windows package naming
         shell: pwsh
