@@ -1,0 +1,52 @@
+name: CertLeap Phase 3 service process identity fix
+
+on:
+  push:
+    branches:
+      - certleap-phase3-installer-server-fallback
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-service-process-identity:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Replace remaining display-name process identity
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          path = Path("src/platform/windows.rs")
+          text = path.read_text(encoding="utf-8")
+          old = "taskkill /F /IM {app_name}.exe{filter}"
+          new = "taskkill /F /IM {app_exe_name}{filter}"
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f"expected exactly one remaining display-name process identity, found {count}")
+          marker = "fn get_install_service_commands(path: &str, exe: &str) -> ResultType<String> {\n    let app_name = crate::get_app_name();\n    let service_name = installer_identity::SERVICE_NAME;"
+          replacement = marker + "\n    let app_exe_name = installer_identity::app_exe_name();"
+          if marker not in text:
+              raise SystemExit("service install identity marker not found")
+          text = text.replace(marker, replacement, 1)
+          text = text.replace(old, new, 1)
+          if old in text:
+              raise SystemExit("display-name process identity still remains")
+          path.write_text(text, encoding="utf-8")
+          '@ | Set-Content fix_service_process_identity.py
+          python fix_service_process_identity.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Commit production fix
+        shell: bash
+        run: |
+          git config user.name "kviethp"
+          git config user.email "86997943+kviethp@users.noreply.github.com"
+          git add src/platform/windows.rs
+          git commit -m "fix: use CertLeap binary name in service install"
+          git push origin HEAD:refs/heads/certleap-phase3-installer-server-fallback
