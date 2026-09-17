@@ -1076,7 +1076,12 @@ pub fn is_rustdesk() -> bool {
 
 #[inline]
 pub fn get_uri_prefix() -> String {
-    format!("{}://", get_app_name().to_lowercase())
+    let app_name = get_app_name();
+    if app_name == "CertLeap Academy" {
+        "certleap://".to_owned()
+    } else {
+        format!("{}://", app_name.to_lowercase())
+    }
 }
 
 #[cfg(target_os = "macos")]
