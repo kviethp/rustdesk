@@ -6,11 +6,23 @@ on:
       - certleap-phase3-installer-server-fallback
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   msi-service-identity:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
+
+      - name: Apply MSI service identity patch
+        shell: pwsh
+        run: |
+          python .github/scripts/certleap_phase3_msi_service_identity.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Verify MSI uses stable CertLeap service identity
         shell: pwsh
         run: |
@@ -26,3 +38,16 @@ jobs:
               exit 1
             }
           }
+
+      - name: Commit verified MSI service identity
+        shell: bash
+        run: |
+          if git diff --quiet -- res/msi/Package/Components/RustDesk.wxs; then
+            echo "MSI service identity already committed."
+            exit 0
+          fi
+          git config user.name "kviethp"
+          git config user.email "86997943+kviethp@users.noreply.github.com"
+          git add res/msi/Package/Components/RustDesk.wxs
+          git commit -m "fix: align CertLeap MSI service identity"
+          git push origin HEAD:refs/heads/certleap-phase3-installer-server-fallback
