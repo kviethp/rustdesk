@@ -976,9 +976,9 @@ def build_flutter_windows(version, features, skip_portable_pack):
                   './certleap_academy_portable.exe')
     print(
         f'output location: {os.path.abspath(os.curdir)}/certleap_academy_portable.exe')
-    os.rename('./certleap_academy_portable.exe', f'./certleap-academy-{version}-install.exe')
+    os.rename('./certleap_academy_portable.exe', f'./certleap-academy-{version}-portable.exe')
     print(
-        f'output location: {os.path.abspath(os.curdir)}/certleap-academy-{version}-install.exe')
+        f'output location: {os.path.abspath(os.curdir)}/certleap-academy-{version}-portable.exe')
 
 
 def main():
