@@ -6,27 +6,34 @@ on:
       - certleap-phase3-installer-server-fallback
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   installer-identity:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+
+      - name: Apply Windows installer identity patch
+        shell: pwsh
+        run: |
+          python .github/scripts/certleap_phase3_windows_identity.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Run standalone installer identity tests
         shell: pwsh
         run: |
-          if (Test-Path 'src/platform/windows/installer_identity.rs') {
-            @'
+          @'
           #[path = "src/platform/windows/installer_identity.rs"]
           mod installer_identity;
           '@ | Set-Content installer_identity_harness.rs
-            rustc --edition 2021 --test installer_identity_harness.rs -o installer_identity_tests.exe
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            .\installer_identity_tests.exe
-          } else {
-            Write-Error 'Installer identity module is missing.'
-            exit 1
-          }
+          rustc --edition 2021 --test installer_identity_harness.rs -o installer_identity_tests.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\installer_identity_tests.exe
 
       - name: Verify Windows installer identity wiring
         shell: pwsh
@@ -47,3 +54,16 @@ jobs:
               exit 1
             }
           }
+
+      - name: Commit verified Windows identity wiring
+        shell: bash
+        run: |
+          if git diff --quiet -- src/platform/windows.rs; then
+            echo "Windows identity wiring already committed."
+            exit 0
+          fi
+          git config user.name "kviethp"
+          git config user.email "86997943+kviethp@users.noreply.github.com"
+          git add src/platform/windows.rs
+          git commit -m "fix: separate CertLeap Windows runtime identities"
+          git push origin HEAD:refs/heads/certleap-phase3-installer-server-fallback
