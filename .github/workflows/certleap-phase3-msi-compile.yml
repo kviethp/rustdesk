@@ -1,0 +1,71 @@
+name: CertLeap Phase 3 MSI compile verification
+
+on:
+  push:
+    branches:
+      - certleap-phase3-installer-server-fallback
+  workflow_dispatch:
+
+jobs:
+  compile-msi:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Create minimal CertLeap distribution
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path rustdesk | Out-Null
+          $source = @'
+          using System;
+          public static class Program {
+              public static void Main(string[] args) {
+                  if (args.Length > 0 && args[0] == "--version") {
+                      Console.Write("1.5.0");
+                      return;
+                  }
+                  if (args.Length > 0 && args[0] == "--build-date") {
+                      Console.Write("2026-09-17 12:00");
+                      return;
+                  }
+              }
+          }
+          '@
+          Add-Type -TypeDefinition $source -Language CSharp -OutputType ConsoleApplication -OutputAssembly "$pwd\rustdesk\certleap_academy.exe"
+          if (-not (Test-Path 'rustdesk/certleap_academy.exe')) {
+            Write-Error 'Failed to create MSI fixture executable.'
+            exit 1
+          }
+
+      - name: Preprocess and compile MSI
+        shell: pwsh
+        run: |
+          Push-Location res/msi
+          python preprocess.py --arp -d ../../rustdesk --app-name "CertLeap Academy" --app-exe-name certleap_academy --app-id certleap --revision-version 0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $includes = Get-Content 'Package/Includes.wxi' -Raw
+          if (-not $includes.Contains('<?define Product="CertLeap Academy" ?>')) { throw 'MSI Product display name is wrong.' }
+          if (-not $includes.Contains('<?define AppExeName="certleap_academy" ?>')) { throw 'MSI executable identity is wrong.' }
+          if (-not $includes.Contains('<?define ProductLower="certleap" ?>')) { throw 'MSI stable identity is wrong.' }
+
+          $wix = Get-Content 'Package/Components/RustDesk.wxs' -Raw
+          if (-not $wix.Contains('Property="CreateStartService" Value="$(var.ProductLower);')) { throw 'MSI service creation identity is wrong.' }
+          if (-not $wix.Contains('Property="TryStopDeleteService" Value="$(var.ProductLower)"')) { throw 'MSI service deletion identity is wrong.' }
+          if (-not $wix.Contains('Property="AppName" Value="$(var.ProductLower)"')) { throw 'MSI service status identity is wrong.' }
+
+          nuget restore msi.sln
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $msi = Get-ChildItem ./Package/bin/*/Release/en-us/Package.msi | Select-Object -First 1
+          if (-not $msi) {
+            Write-Error 'WiX/MSBuild completed without producing Package.msi.'
+            exit 1
+          }
+          Write-Host "Verified MSI: $($msi.FullName)"
+          Pop-Location
