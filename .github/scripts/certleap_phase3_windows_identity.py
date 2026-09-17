@@ -144,6 +144,16 @@ replace_once(
     "service install identity",
 )
 replace_once(
+    '''fn get_install_service_commands(path: &str, exe: &str) -> ResultType<String> {
+    let app_name = crate::get_app_name();
+    let service_name = installer_identity::SERVICE_NAME;''',
+    '''fn get_install_service_commands(path: &str, exe: &str) -> ResultType<String> {
+    let app_name = crate::get_app_name();
+    let service_name = installer_identity::SERVICE_NAME;
+    let app_exe_name = installer_identity::app_exe_name();''',
+    "service install executable identity",
+)
+replace_once(
     '''sc stop {app_name}
 sc delete {app_name}
 sc create {app_name} binpath= \\\"\\\\\\\"{exe}\\\\\\\" --import-config \\\\\\\"{config_path}\\\\\\\"\\\" start= auto DisplayName= \\\"{app_name} Service\\\"
@@ -157,6 +167,11 @@ sc start {service_name}
 sc stop {service_name}
 sc delete {service_name}''',
     "service install commands",
+)
+replace_once(
+    "taskkill /F /IM {app_name}.exe{filter}",
+    "taskkill /F /IM {app_exe_name}{filter}",
+    "service install process identity",
 )
 
 replace_once(
@@ -230,10 +245,14 @@ required = [
     "service_name = installer_identity::SERVICE_NAME",
     "installer_identity::URI_SCHEME",
     "installer_identity::APP_EXE_STEM",
+    "taskkill /F /IM {app_exe_name}{filter}",
 ]
 for needle in required:
     if needle not in text:
         raise RuntimeError(f"missing required identity wiring after patch: {needle}")
+
+if "taskkill /F /IM {app_name}.exe" in text:
+    raise RuntimeError("display-name executable identity remains in Windows process commands")
 
 if text != original:
     path.write_text(text, encoding="utf-8")
