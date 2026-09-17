@@ -1,0 +1,28 @@
+name: CertLeap Phase 3 MSI service identity
+
+on:
+  push:
+    branches:
+      - certleap-phase3-installer-server-fallback
+  workflow_dispatch:
+
+jobs:
+  msi-service-identity:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify MSI uses stable CertLeap service identity
+        shell: pwsh
+        run: |
+          $wix = Get-Content 'res/msi/Package/Components/RustDesk.wxs' -Raw
+          $required = @(
+            'Property="CreateStartService" Value="$(var.ProductLower);',
+            'Property="TryStopDeleteService" Value="$(var.ProductLower)"',
+            'Property="AppName" Value="$(var.ProductLower)"'
+          )
+          foreach ($needle in $required) {
+            if (-not $wix.Contains($needle)) {
+              Write-Error "MSI service identity is still derived from Product display name: $needle"
+              exit 1
+            }
+          }
