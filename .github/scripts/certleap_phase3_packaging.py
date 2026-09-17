@@ -9,12 +9,13 @@ build_text = build_py.read_text(encoding="utf-8")
 old_build = "certleap-academy-{version}-install.exe"
 new_build = "certleap-academy-{version}-portable.exe"
 if old_build in build_text:
-    if build_text.count(old_build) != 1:
-        raise RuntimeError("expected one build.py install artifact name")
-    build_text = build_text.replace(old_build, new_build, 1)
+    old_count = build_text.count(old_build)
+    if old_count != 2:
+        raise RuntimeError(f"expected two build.py install artifact references, found {old_count}")
+    build_text = build_text.replace(old_build, new_build)
     build_py.write_text(build_text, encoding="utf-8")
-elif new_build not in build_text:
-    raise RuntimeError("could not find CertLeap portable artifact naming in build.py")
+elif build_text.count(new_build) != 2:
+    raise RuntimeError("could not find both CertLeap portable artifact references in build.py")
 
 workflow_text = workflow.read_text(encoding="utf-8")
 old_workflow = "./SignOutput/certleap-academy-${{ env.VERSION }}-${{ matrix.job.arch }}.exe"
