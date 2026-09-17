@@ -1,3 +1,15 @@
+pub(super) const APP_EXE_STEM: &str = "certleap_academy";
+pub(super) const SERVICE_NAME: &str = "certleap";
+pub(super) const URI_SCHEME: &str = "certleap";
+
+pub(super) fn app_exe_name() -> String {
+    format!("{APP_EXE_STEM}.exe")
+}
+
+pub(super) fn installed_executable_path(install_path: &str) -> String {
+    format!("{}\\{}", install_path.trim_end_matches('\\'), app_exe_name())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
