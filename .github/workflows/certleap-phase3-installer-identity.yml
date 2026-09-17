@@ -16,7 +16,12 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path 'src/platform/windows/installer_identity.rs') {
-            rustc --edition 2021 --test src/platform/windows/installer_identity.rs -o installer_identity_tests.exe
+            @'
+          #[path = "src/platform/windows/installer_identity.rs"]
+          mod installer_identity;
+          '@ | Set-Content installer_identity_harness.rs
+            rustc --edition 2021 --test installer_identity_harness.rs -o installer_identity_tests.exe
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             .\installer_identity_tests.exe
           } else {
             Write-Host 'Installer identity test module not added yet.'
