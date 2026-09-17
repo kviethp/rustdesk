@@ -1,0 +1,23 @@
+name: CertLeap Phase 3 installer identity
+
+on:
+  push:
+    branches:
+      - certleap-phase3-installer-server-fallback
+  workflow_dispatch:
+
+jobs:
+  installer-identity:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run standalone installer identity tests
+        shell: pwsh
+        run: |
+          if (Test-Path 'src/platform/windows/installer_identity.rs') {
+            rustc --edition 2021 --test src/platform/windows/installer_identity.rs -o installer_identity_tests.exe
+            .\installer_identity_tests.exe
+          } else {
+            Write-Host 'Installer identity test module not added yet.'
+          }
