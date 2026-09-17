@@ -99,6 +99,7 @@ use winreg::{enums::*, RegKey};
 
 mod acl;
 mod installer_handoff;
+mod installer_identity;
 mod installer_shell;
 mod msi_registry;
 pub(crate) use acl::current_process_user_sid_string;
@@ -556,7 +557,7 @@ fn service_main(arguments: Vec<OsString>) {
 
 pub fn start_os_service() {
     if let Err(e) =
-        windows_service::service_dispatcher::start(crate::get_app_name(), ffi_service_main)
+        windows_service::service_dispatcher::start(installer_identity::SERVICE_NAME, ffi_service_main)
     {
         log::error!("start_service failed: {}", e);
     }
@@ -677,7 +678,7 @@ async fn run_service(_arguments: Vec<OsString>) -> ResultType<()> {
     };
 
     // Register system service event handler
-    let status_handle = service_control_handler::register(crate::get_app_name(), event_handler)?;
+    let status_handle = service_control_handler::register(installer_identity::SERVICE_NAME, event_handler)?;
 
     let next_status = ServiceStatus {
         // Should match the one from system service registry
@@ -1386,8 +1387,7 @@ fn get_valid_subkey() -> String {
 
 // Return install options other than InstallLocation.
 pub fn get_install_options() -> String {
-    let app_name = crate::get_app_name();
-    let subkey = format!(".{}", app_name.to_lowercase());
+    let subkey = format!(".{}", installer_identity::URI_SCHEME);
     let mut opts = HashMap::new();
 
     let desktop_shortcuts = get_reg_of_hkcr(&subkey, REG_NAME_INSTALL_DESKTOPSHORTCUTS);
@@ -1409,8 +1409,7 @@ pub fn get_silent_install_options(printer_override: Option<bool>) -> &'static st
     let install_printer = match printer_override {
         Some(override_value) => override_value,
         None => {
-            let app_name = crate::get_app_name();
-            let subkey = format!(".{}", app_name.to_lowercase());
+            let subkey = format!(".{}", installer_identity::URI_SCHEME);
             let printer = get_reg_of_hkcr(&subkey, REG_NAME_INSTALL_PRINTER);
             printer.as_deref() == Some("1")
         }
@@ -1511,7 +1510,7 @@ fn get_install_info_with_subkey(subkey: String) -> (String, String, String, Stri
         "%ProgramData%\\Microsoft\\Windows\\Start Menu\\Programs\\{}",
         crate::get_app_name()
     );
-    let exe = format!("{}\\{}.exe", path, crate::get_app_name());
+    let exe = installer_identity::installed_executable_path(&path);
     (subkey, path, start_menu, exe)
 }
 
@@ -1547,13 +1546,13 @@ pub fn rename_exe_cmd(src_exe: &str, path: &str) -> ResultType<String> {
         .ok_or(anyhow!("Can't get file name of {src_exe}"))?
         .to_string_lossy()
         .to_string();
-    let app_name = crate::get_app_name();
-    if src_exe_filename == format!("{app_name}.exe") {
+    let app_exe_name = installer_identity::app_exe_name();
+    if src_exe_filename == app_exe_name {
         Ok("".to_owned())
     } else {
         Ok(format!(
             "
-        move /Y \"{path}\\{src_exe_filename}\" \"{path}\\{app_name}.exe\"
+        move /Y \"{path}\\{src_exe_filename}\" \"{path}\\{app_exe_name}\"
         ",
         ))
     }
@@ -1579,7 +1578,7 @@ fn get_after_install(
     reg_value_printer: Option<String>,
 ) -> String {
     let app_name = crate::get_app_name();
-    let ext = app_name.to_lowercase();
+    let ext = installer_identity::URI_SCHEME;
     let nested_exe = escape_nested_cmd_ampersands(exe);
 
     // reg delete HKEY_CURRENT_USER\Software\Classes for
@@ -1839,7 +1838,9 @@ pub fn run_before_uninstall() -> ResultType<()> {
 
 fn get_before_uninstall(kill_self: bool) -> String {
     let app_name = crate::get_app_name();
-    let ext = app_name.to_lowercase();
+    let service_name = installer_identity::SERVICE_NAME;
+    let app_exe_name = installer_identity::app_exe_name();
+    let ext = installer_identity::URI_SCHEME;
     let filter = if kill_self {
         "".to_string()
     } else {
@@ -1848,10 +1849,10 @@ fn get_before_uninstall(kill_self: bool) -> String {
     format!(
         "
     chcp 65001
-    sc stop {app_name}
-    sc delete {app_name}
+    sc stop {service_name}
+    sc delete {service_name}
     taskkill /F /IM {broker_exe}
-    taskkill /F /IM {app_name}.exe{filter}
+    taskkill /F /IM {app_exe_name}{filter}
     reg delete HKEY_CLASSES_ROOT\\.{ext} /f
     reg delete HKEY_CLASSES_ROOT\\{ext} /f
     netsh advfirewall firewall delete rule name=\"{app_name} Service\"
@@ -2171,8 +2172,7 @@ pub fn update_install_option(k: &str, v: &str) -> ResultType<()> {
     if ![REG_NAME_INSTALL_PRINTER].contains(&k) || !["0", "1"].contains(&v) {
         return Ok(());
     }
-    let app_name = crate::get_app_name();
-    let ext = app_name.to_lowercase();
+    let ext = installer_identity::URI_SCHEME;
     let cmds =
         format!("chcp 65001 && reg add HKEY_CLASSES_ROOT\\.{ext} /f /v {k} /t REG_SZ /d \"{v}\"");
     run_cmds(cmds, false, "update_install_option")?;
@@ -3353,13 +3353,15 @@ pub fn uninstall_service(show_new_window: bool, _: bool) -> bool {
     let cmds = format!(
         "
     chcp 65001
-    sc stop {app_name}
-    sc delete {app_name}
+    sc stop {service_name}
+    sc delete {service_name}
     if exist \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\" del /f /q \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{app_name} Tray.lnk\"
     taskkill /F /IM {broker_exe}
-    taskkill /F /IM {app_name}.exe{filter}
+    taskkill /F /IM {app_exe_name}{filter}
     ",
         app_name = crate::get_app_name(),
+        service_name = installer_identity::SERVICE_NAME,
+        app_exe_name = installer_identity::app_exe_name(),
         broker_exe = WIN_TOPMOST_INJECTED_PROCESS_EXE,
     );
     if let Err(err) = run_cmds(cmds, false, "uninstall") {
@@ -3373,6 +3375,7 @@ pub fn uninstall_service(show_new_window: bool, _: bool) -> bool {
 
 fn get_install_service_commands(path: &str, exe: &str) -> ResultType<String> {
     let app_name = crate::get_app_name();
+    let service_name = installer_identity::SERVICE_NAME;
     for value in [path, exe] {
         validate_install_value(value)?;
     }
@@ -3614,8 +3617,8 @@ reg add {subkey} /f /v EstimatedSize /t REG_DWORD /d {size}
     let cmds = format!(
         "
 chcp 65001
-sc stop {app_name}
-taskkill /F /IM {app_name}.exe{filter}
+sc stop {service_name}
+taskkill /F /IM {app_exe_name}{filter}
 {reg_cmd}
 {copy_exe}
 {rename_exe}
@@ -3626,6 +3629,8 @@ taskkill /F /IM {app_name}.exe{filter}
 {sleep}
     ",
         app_name = app_name,
+        service_name = installer_identity::SERVICE_NAME,
+        app_exe_name = app_exe_name,
         copy_exe = copy_exe_cmd(&src_exe, &exe, &path)?,
         rename_exe = rename_exe_cmd(&src_exe, &path)?,
         remove_meta_toml = remove_meta_toml_cmd(is_msi.unwrap_or(true), &path),
@@ -3990,12 +3995,12 @@ fn get_import_config(exe: &str) -> String {
     let config_path = Config::file();
     let config_path = escape_nested_cmd_ampersands(config_path.to_str().unwrap_or(""));
     format!("
-sc stop {app_name}
-sc delete {app_name}
-sc create {app_name} binpath= \"\\\"{exe}\\\" --import-config \\\"{config_path}\\\"\" start= auto DisplayName= \"{app_name} Service\"
-sc start {app_name}
-sc stop {app_name}
-sc delete {app_name}
+sc stop {service_name}
+sc delete {service_name}
+sc create {service_name} binpath= \"\\\"{exe}\\\" --import-config \\\"{config_path}\\\"\" start= auto DisplayName= \"{app_name} Service\"
+sc start {service_name}
+sc stop {service_name}
+sc delete {service_name}
 ",
     app_name = crate::get_app_name(),
 )
@@ -4013,9 +4018,10 @@ if exist \"%PROGRAMDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{ap
     } else {
         let exe = escape_nested_cmd_ampersands(exe);
         format!("
-sc create {app_name} binpath= \"\\\"{exe}\\\" --service\" start= auto DisplayName= \"{app_name} Service\"
-sc start {app_name}
+sc create {service_name} binpath= \"\\\"{exe}\\\" --service\" start= auto DisplayName= \"{app_name} Service\"
+sc start {service_name}
 ",
+    service_name = installer_identity::SERVICE_NAME,
     app_name = crate::get_app_name())
     }
 }
@@ -4225,7 +4231,7 @@ fn get_uninstall_amyuni_idd() -> String {
 
 #[inline]
 pub fn is_self_service_running() -> bool {
-    is_service_running(&crate::get_app_name())
+    is_service_running(installer_identity::SERVICE_NAME)
 }
 
 pub fn is_service_running(service_name: &str) -> bool {
@@ -4256,7 +4262,7 @@ pub fn release_arch_suffix() -> Option<&'static str> {
 pub fn try_kill_rustdesk_main_window_process() -> ResultType<()> {
     // Kill rustdesk.exe without extra arg, should only be called by --server
     // We can find the exact process which occupies the ipc, see more from https://github.com/winsiderss/systeminformer
-    let app_name = crate::get_app_name().to_lowercase();
+    let app_name = installer_identity::APP_EXE_STEM.to_owned();
     log::info!("try kill main window process");
     use hbb_common::sysinfo::System;
     let mut sys = System::new();
