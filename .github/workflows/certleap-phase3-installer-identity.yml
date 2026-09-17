@@ -21,6 +21,12 @@ jobs:
         run: |
           python .github/scripts/certleap_phase3_windows_identity.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Apply Windows package naming patch
+        shell: pwsh
+        run: |
+          python .github/scripts/certleap_phase3_packaging.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git diff --check
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -73,15 +79,18 @@ jobs:
             exit 1
           }
 
-      - name: Commit verified Windows identity wiring
+      - name: Commit verified source and staged release workflow
         shell: bash
         run: |
-          if git diff --quiet -- src/platform/windows.rs; then
-            echo "Windows identity wiring already committed."
-            exit 0
-          fi
           git config user.name "kviethp"
           git config user.email "86997943+kviethp@users.noreply.github.com"
-          git add src/platform/windows.rs
-          git commit -m "fix: separate CertLeap Windows runtime identities"
+          git add src/platform/windows.rs build.py
+          if [ -f .github/scripts/staged_flutter_build_phase3.yml ]; then
+            git add .github/scripts/staged_flutter_build_phase3.yml
+          fi
+          if git diff --cached --quiet; then
+            echo "Phase 3 installer/package changes already committed."
+            exit 0
+          fi
+          git commit -m "fix: distinguish CertLeap setup and portable packages"
           git push origin HEAD:refs/heads/certleap-phase3-installer-server-fallback
