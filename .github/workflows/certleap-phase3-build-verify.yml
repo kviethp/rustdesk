@@ -1,9 +1,6 @@
 name: CertLeap Phase 3 standard build verification
 
 on:
-  push:
-    branches:
-      - certleap-phase3-installer-server-fallback
   workflow_dispatch:
 
 jobs:
