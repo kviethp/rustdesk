@@ -291,11 +291,8 @@ void runConnectionManagerScreen() async {
   );
   final hide = await bind.cmGetConfig(name: "hide_cm") == 'true';
   gFFI.serverModel.hideCm = hide;
-  if (hide) {
-    await hideCmWindow(isStartup: true);
-  } else {
-    await showCmWindow(isStartup: true);
-  }
+  // Client state arrives later; let it decide when the CM window needs to appear.
+  await hideCmWindow(isStartup: true);
   setResizable(false);
   // Start the uni links handler and redirect links to Native, not for Flutter.
   listenUniLinks(handleByFlutter: false);
@@ -303,10 +300,18 @@ void runConnectionManagerScreen() async {
 
 bool _isCmReadyToShow = false;
 
+WindowOptions getCmWindowOptions({bool? alwaysOnTop}) => WindowOptions(
+      size: kConnectionManagerWindowSizeClosedChat,
+      backgroundColor: Colors.transparent,
+      skipTaskbar: isWindows,
+      titleBarStyle:
+          kUseCompatibleUiMode ? TitleBarStyle.normal : TitleBarStyle.hidden,
+      alwaysOnTop: alwaysOnTop,
+    );
+
 showCmWindow({bool isStartup = false}) async {
   if (isStartup) {
-    WindowOptions windowOptions = getHiddenTitleBarWindowOptions(
-        size: kConnectionManagerWindowSizeClosedChat, alwaysOnTop: true);
+    WindowOptions windowOptions = getCmWindowOptions(alwaysOnTop: true);
     await windowManager.waitUntilReadyToShow(windowOptions, null);
     bind.mainHideDock();
     await Future.wait([
@@ -332,8 +337,7 @@ showCmWindow({bool isStartup = false}) async {
 
 hideCmWindow({bool isStartup = false}) async {
   if (isStartup) {
-    WindowOptions windowOptions = getHiddenTitleBarWindowOptions(
-        size: kConnectionManagerWindowSizeClosedChat);
+    WindowOptions windowOptions = getCmWindowOptions();
     windowManager.setOpacity(0);
     await windowManager.waitUntilReadyToShow(windowOptions, null);
     bind.mainHideDock();
