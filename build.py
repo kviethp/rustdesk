@@ -964,6 +964,7 @@ def build_flutter_windows(version, features, skip_portable_pack):
     if skip_portable_pack:
         return
     os.chdir('libs/portable')
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
     system2('pip3 install -r requirements.txt')
     system2(
         f'python ./generate.py -f ../../{flutter_build_dir_2} -o . -e ../../{flutter_build_dir_2}/certleap_academy.exe')
@@ -974,9 +975,7 @@ def build_flutter_windows(version, features, skip_portable_pack):
     else:
         os.rename('./target/release/rustdesk-portable-packer.exe',
                   './certleap_academy_portable.exe')
-    print(
-        f'output location: {os.path.abspath(os.curdir)}/certleap_academy_portable.exe')
-    os.rename('./certleap_academy_portable.exe', f'./certleap-academy-{version}-install.exe')
+    os.replace('./certleap_academy_portable.exe', f'./certleap-academy-{version}-install.exe')
     print(
         f'output location: {os.path.abspath(os.curdir)}/certleap-academy-{version}-install.exe')
 
